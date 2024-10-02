@@ -1,0 +1,35 @@
+TASK:1
+
+from ultralytics import YOLO
+import cv2
+import numpy as np
+
+def segment_object_yolo(image_path, class_name):
+    # Load YOLOv8 model
+    model = YOLO('yolov8n-seg.pt')
+    
+    # Load image
+    image = cv2.imread("/content/chair.jpg")
+
+    # Perform inference
+    results = model(image)
+    
+    # Extract masks
+    if results[0].masks is not None:
+        masks = results[0].masks.data  # Get the mask data as a tensor
+        for mask in masks:
+            # Convert mask to a NumPy array and resize to match the image
+            mask_array = mask.cpu().numpy()  #convert to numpy
+            mask_resized = cv2.resize(mask_array, (image.shape[1], image.shape[0]))
+
+            # Apply mask (overlay red color on masked regions)
+            image[mask_resized > 0.5] = [0, 0, 255]  # Red color for mask
+
+    # Save result
+    output_path = "generated_yolo_mask_fixed.png"
+    cv2.imwrite(output_path, image)
+
+    return output_path
+
+# Example usage:
+segment_object_yolo("/content/chair.jpg", "chair")
