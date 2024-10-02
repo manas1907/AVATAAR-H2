@@ -1,0 +1,60 @@
+TASK:2
+
+from ultralytics import YOLO
+import cv2
+import numpy as np
+
+def rotate_image(image, angle):
+    (h, w) = image.shape[:2]
+    (cX, cY) = (w // 2, h // 2)
+
+    # Calculate the rotation matrix
+    M = cv2.getRotationMatrix2D((cX, cY), angle, 1.0)
+    
+    # Perform the rotation
+    rotated = cv2.warpAffine(image, M, (w, h))
+    
+    return rotated
+
+def segment_and_rotate_object_yolo(image_path, class_name, azimuth_angle, polar_angle):
+    # Load YOLOv8 model
+    model = YOLO('yolov8n-seg.pt')
+    
+    # Load image
+    image = cv2.imread(image_path)
+    original_image = image.copy()  # Save a copy of the original image
+
+    # Perform inference
+    results = model(image)
+    
+    # Extract masks
+    if results[0].masks is not None:
+        masks = results[0].masks.data  # Get the mask data as a tensor
+        for mask in masks:
+            # Convert mask to a NumPy array and resize to match the image
+            mask_array = mask.cpu().numpy()  # Move tensor to CPU and convert to numpy
+            mask_resized = cv2.resize(mask_array, (image.shape[1], image.shape[0]))
+
+            # Create the mask for the object
+            mask_resized_binary = mask_resized > 0.5
+
+            # Extract the segmented object
+            segmented_object = np.zeros_like(image)
+            segmented_object[mask_resized_binary] = image[mask_resized_binary]
+
+            # Rotate the segmented object by azimuth angle (in degrees)
+            rotated_object = rotate_image(segmented_object, azimuth_angle)
+
+            # Overlay the rotated object back onto the original image
+            original_image[mask_resized_binary] = rotated_object[mask_resized_binary]
+
+    # Save result
+    output_path = "generated_rotated_object.png"
+    cv2.imwrite(output_path, original_image)
+
+    return output_path
+
+
+# Azimuth = +72 degrees (horizontal rotation)
+# Polar = +0 degrees (no vertical rotation since we are rotating in 2D)
+segment_and_rotate_object_yolo("/content/chair.jpg", "chair", azimuth_angle=72, polar_angle=0)
